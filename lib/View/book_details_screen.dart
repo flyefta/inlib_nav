@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:in_lib_nav/Model/book.dart';
-import 'package:in_lib_nav/View/navigation_screen.dart';
 import 'package:in_lib_nav/View/text_detector_view.dart';
 
 class BookDetailsScreen extends StatelessWidget {
@@ -23,11 +22,12 @@ class BookDetailsScreen extends StatelessWidget {
                 style: const TextStyle(fontSize: 18)),
             Text('ISBN: ${book.isbn}', style: const TextStyle(fontSize: 18)),
             Text('DDC: ${book.ddc}', style: const TextStyle(fontSize: 18)),
-            // ... (Add other book details)
+
+            // TODO!: ΑΛΛΕΣ ΛΕΠΤΟΜΕΡΕΙΕΣ ΠΟΥ ΜΠΟΡΕΙ ΝΑ ΧΡΕΙΑΣΤΟΥΝ;
+
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                // _navigateToShelf(context, book);
                 Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -40,39 +40,4 @@ class BookDetailsScreen extends StatelessWidget {
       ),
     );
   }
-
-  // void _navigateToShelf(BuildContext context, Book book) {
-  //   //
-  //   String shelfLocation = getShelfLocation(book);
-
-  //   showDialog(
-  //     context: context,
-  //     builder: (BuildContext context) {
-  //       return AlertDialog(
-  //         title: const Text('Ράφι βιβλίου'),
-  //         content: Text('Το βιβλίο βρίσκεται στο ράφι: $shelfLocation'),
-  //         actions: [
-  //           TextButton(
-  //             onPressed: () {
-  //               Navigator.of(context).pop();
-  //             },
-  //             child: const Text('OK'),
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  // }
-
-  // String getShelfLocation(Book book) {
-  //   //παράδειγμα!!!
-  //   //ΕΔΩ ΘΑ ΜΠΕΙ Η ΛΟΓΙΚΗ
-  //   if (book.title.contains('Python')) {
-  //     return 'Τμήμα Πληροφορικής, Ράφι 3';
-  //   } else if (book.title.contains('Lord of the Rings')) {
-  //     return 'Τμήμα Φιλολογίας, Ράφι 1';
-  //   } else {
-  //     return 'Δεν βρέθηκε η θέση του ραφιού.';
-  //   }
-  // }
 }

@@ -1,120 +1,139 @@
-import 'package:camera/camera.dart';
+import 'package:ar_flutter_plugin_updated/ar_flutter_plugin.dart';
+import 'package:ar_flutter_plugin_updated/datatypes/config_planedetection.dart';
+import 'package:ar_flutter_plugin_updated/datatypes/node_types.dart';
+import 'package:ar_flutter_plugin_updated/managers/ar_anchor_manager.dart';
+import 'package:ar_flutter_plugin_updated/managers/ar_location_manager.dart';
+import 'package:ar_flutter_plugin_updated/managers/ar_object_manager.dart';
+import 'package:ar_flutter_plugin_updated/managers/ar_session_manager.dart';
+import 'package:ar_flutter_plugin_updated/models/ar_anchor.dart';
+import 'package:ar_flutter_plugin_updated/models/ar_node.dart';
 import 'package:flutter/material.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:vector_math/vector_math_64.dart';
+import 'package:camera/camera.dart';
+import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 
-import 'detector_view.dart';
-import 'painters/text_detector_painter.dart';
-
-class NavigationScreen extends StatefulWidget {
-  const NavigationScreen({super.key});
+class ObjectRecognitionWidget extends StatefulWidget {
+  const ObjectRecognitionWidget({super.key});
 
   @override
-  State<NavigationScreen> createState() => _NavigationScreenState();
+  State<ObjectRecognitionWidget> createState() =>
+      _ObjectRecognitionWidgetState();
 }
 
-class _NavigationScreenState extends State<NavigationScreen> {
-  var _script = TextRecognitionScript.latin;
-  var _textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-  bool _canProcess = true;
-  bool _isBusy = false;
-  CustomPaint? _customPaint;
-  String? _text;
-  var _cameraLensDirection = CameraLensDirection.back;
+class _ObjectRecognitionWidgetState extends State<ObjectRecognitionWidget> {
+  ARSessionManager? arSessionManager;
+  ARObjectManager? arObjectManager;
+  ARAnchorManager? arAnchorManager;
+
+  List<ARNode> nodes = [];
+  List<ARAnchor> anchors = [];
+
+  late CameraController _cameraController;
+  late List<CameraDescription> _cameras;
+  late ImageLabeler imageLabeler; // Αλλαγή εδώ
+  bool isRecognizing = false;
 
   @override
-  void dispose() async {
-    _canProcess = false;
-    _textRecognizer.close();
+  void initState() {
+    super.initState();
+    _initializeCamera();
+    imageLabeler = ImageLabeler(
+      options: ImageLabelerOptions(confidenceThreshold: 0.8),
+    ); // Αρχικοποίηση εδώ
+  }
+
+  Future<void> _initializeCamera() async {
+    _cameras = await availableCameras();
+    _cameraController = CameraController(_cameras[0], ResolutionPreset.medium);
+    await _cameraController.initialize();
+    _cameraController.startImageStream(_processImage);
+  }
+
+  Future<void> _processImage(CameraImage image) async {
+    if (isRecognizing) return;
+    isRecognizing = true;
+
+    final inputImage = InputImage.fromBytes(
+      bytes: image.planes[0].bytes,
+      metadata: InputImageMetadata(
+        // Αλλαγή εδώ
+        size: Size(image.width.toDouble(), image.height.toDouble()),
+        rotation: InputImageRotation.rotation0deg,
+        format: InputImageFormat.yuv420, // Αλλαγή εδώ
+        bytesPerRow: image.planes[0].bytesPerRow, // Αλλαγή εδώ
+      ),
+    );
+
+    final labels = await imageLabeler.processImage(inputImage);
+
+    for (final label in labels) {
+      if (label.label == '1') {
+        _showARNode();
+        break;
+      }
+    }
+
+    isRecognizing = false;
+  }
+
+  void _showARNode() {
+    var newAnchor = ARPlaneAnchor(transformation: Matrix4.identity());
+    arAnchorManager!.addAnchor(newAnchor);
+    anchors.add(newAnchor);
+
+    var newNode = ARNode(
+      type: NodeType.localGLTF2,
+      uri: "assets/models/arrow/scene.gltf",
+      scale: Vector3(0.2, 0.2, 0.2),
+      position: Vector3(0.0, 0.0, 0.0),
+      rotation: Vector4(1.0, 0.0, 0.0, 0.0),
+    );
+    arObjectManager!.addNode(newNode, planeAnchor: newAnchor);
+    nodes.add(newNode);
+  }
+
+  @override
+  void dispose() {
     super.dispose();
+    arSessionManager?.dispose();
+    _cameraController.dispose();
+    imageLabeler.close();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(children: [
-        DetectorView(
-          title: 'Text Detector',
-          customPaint: _customPaint,
-          text: _text,
-          onImage: _processImage,
-          initialCameraLensDirection: _cameraLensDirection,
-          onCameraLensDirectionChanged: (value) => _cameraLensDirection = value,
-        ),
-        Positioned(
-            top: 30,
-            left: 100,
-            right: 100,
-            child: Row(
-              children: [
-                Spacer(),
-                Container(
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(10.0),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4.0),
-                      child: _buildDropdown(),
-                    )),
-                Spacer(),
-              ],
-            )),
-      ]),
+      appBar: AppBar(title: const Text('Object Recognition AR')),
+      body: Stack(
+        children: [
+          ARView(
+            onARViewCreated: onARViewCreated,
+            planeDetectionConfig: PlaneDetectionConfig.horizontalAndVertical,
+          ),
+          // CameraPreview(_cameraController),
+        ],
+      ),
     );
   }
 
-  Widget _buildDropdown() => DropdownButton<TextRecognitionScript>(
-        value: _script,
-        icon: const Icon(Icons.arrow_downward),
-        elevation: 16,
-        style: const TextStyle(color: Colors.blue),
-        underline: Container(
-          height: 2,
-          color: Colors.blue,
-        ),
-        onChanged: (TextRecognitionScript? script) {
-          if (script != null) {
-            setState(() {
-              _script = script;
-              _textRecognizer.close();
-              _textRecognizer = TextRecognizer(script: _script);
-            });
-          }
-        },
-        items: TextRecognitionScript.values
-            .map<DropdownMenuItem<TextRecognitionScript>>((script) {
-          return DropdownMenuItem<TextRecognitionScript>(
-            value: script,
-            child: Text(script.name),
-          );
-        }).toList(),
-      );
+  void onARViewCreated(
+    ARSessionManager arSessionManager,
+    ARObjectManager arObjectManager,
+    ARAnchorManager arAnchorManager,
+    ARLocationManager arLocationManager,
+  ) {
+    this.arSessionManager = arSessionManager;
+    this.arObjectManager = arObjectManager;
+    this.arAnchorManager = arAnchorManager;
 
-  Future<void> _processImage(InputImage inputImage) async {
-    if (!_canProcess) return;
-    if (_isBusy) return;
-    _isBusy = true;
-    setState(() {
-      _text = '';
-    });
-    final recognizedText = await _textRecognizer.processImage(inputImage);
-    if (inputImage.metadata?.size != null &&
-        inputImage.metadata?.rotation != null) {
-      final painter = TextRecognizerPainter(
-        recognizedText,
-        inputImage.metadata!.size,
-        inputImage.metadata!.rotation,
-        _cameraLensDirection,
-      );
-      _customPaint = CustomPaint(painter: painter);
-    } else {
-      _text = 'Recognized text:\n\n${recognizedText.text}';
-      // TODO: set _customPaint to draw boundingRect on top of image
-      _customPaint = null;
-    }
-    _isBusy = false;
-    if (mounted) {
-      setState(() {});
-    }
+    this.arSessionManager!.onInitialize(
+      showFeaturePoints: false,
+      showPlanes: true,
+      customPlaneTexturePath: "images/triangle.png",
+      showWorldOrigin: true,
+      handlePans: true,
+      handleRotation: true,
+    );
+    this.arObjectManager!.onInitialize();
   }
 }

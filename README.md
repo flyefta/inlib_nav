@@ -40,7 +40,7 @@
 
 1.  **Clone το αποθετήριο:**
     ```bash
-    git clone <URL_ΑΠΟΘΕΤΗΡΙΟΥ_ΣΑΣ>
+    git clone https://github.com/flyefta/inlib_nav.git
     cd inlib_nav
     ```
 2.  **Εγκατάσταση εξαρτήσεων:**

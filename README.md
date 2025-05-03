@@ -1,16 +1,82 @@
-# inlib_nav
+# InLib Navigation (inlib_nav)
 
-InLib Guide is an indoor navigation app designed for libraries, helping users quickly locate books. With an intuitive interface and real-time directions, it enhances the library experience by making exploration simple and efficient.
+<p align="center">
+  <img src="assets/images/inlib_logo2_trsp.png" alt="InLib Navigation Logo" width="150"/>
+</p>
 
-## Getting Started
+## Περιγραφή
 
-This project is a starting point for a Flutter application.
+Το InLib Navigation είναι μια εφαρμογή πλοήγησης εσωτερικού χώρου σχεδιασμένη για τη βιβλιοθήκη του Πανεπιστημίου Δυτικής Μακεδονίας, με σκοπό να βοηθά τους χρήστες να εντοπίζουν γρήγορα βιβλία. Με ένα εύχρηστο περιβάλλον και οδηγίες σε πραγματικό χρόνο, βελτιώνει την εμπειρία στη βιβλιοθήκη κάνοντας την αναζήτηση απλή και αποδοτική.
 
-A few resources to get you started if this is your first Flutter project:
+Η εφαρμογή επιτρέπει την αναζήτηση βιβλίων βάσει τίτλου, συγγραφέα, ISBN ή του ταξινομικού αριθμού. Μόλις βρεθεί το βιβλίο, εμφανίζονται οι λεπτομέρειές του, συμπεριλαμβανομένου του ραφιού και του διαδρόμου όπου βρίσκεται. Στη συνέχεια, ο χρήστης μπορεί να ξεκινήσει την πλοήγηση προς το ράφι. Η πλοήγηση χρησιμοποιεί την κάμερα της συσκευής για να αναγνωρίζει τις πινακίδες των διαδρόμων (π.χ., "UOWM 1", "UOWM 2") και καθοδηγεί τον χρήστη με οπτικές (πλαίσια, εικονίδια) και ηχητικές οδηγίες.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Βασικά Χαρακτηριστικά
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+* **Αναζήτηση Βιβλίων:** Αναζήτηση με τίτλο, συγγραφέα, ISBN, LOC.
+* **Προβολή Λεπτομερειών:** Εμφάνιση στοιχείων βιβλίου, ραφιού και διαδρόμου.
+* **Υπολογισμός Θέσης:** Αυτόματος υπολογισμός ραφιού και διαδρόμου βάσει του LOC.
+* **Πλοήγηση με Κάμερα:** Χρήση της κάμερας για αναγνώριση πινακίδων διαδρόμων (Text Recognition).
+* **Οπτικοακουστική Καθοδήγηση:** Εμφάνιση πλαισίων/εικονιδίων στην οθόνη και αναπαραγωγή ηχητικών οδηγιών ("Πήγαινε στον διάδρομο Χ", "Το ράφι είναι αριστερά/δεξιά").
+* **Δόνηση:** Δόνηση κατά τον εντοπισμό του σωστού διαδρόμου.
+* **(Πιθανώς) AR Λειτουργίες:** Περιλαμβάνει εξαρτήσεις σχετικές με Augmented Reality (`ar_flutter_plugin_updated`) και αναγνώριση εικόνων/αντικειμένων (`google_mlkit_image_labeling`), αν και η ακριβής υλοποίηση AR στην `navigation_screen.dart` φαίνεται να είναι υπό ανάπτυξη ή πειραματική.
+
+## Τεχνολογίες & Βασικές Εξαρτήσεις
+
+* **Framework:** Flutter
+* **Γλώσσα:** Dart
+* **Διαχείριση Κατάστασης (State Management):** Provider
+* **Κάμερα:** `camera`, `image_picker`
+* **Machine Learning (ML):** Google ML Kit (`google_mlkit_text_recognition`, `google_mlkit_image_labeling`, `google_ml_kit`)
+* **Augmented Reality (AR):** `ar_flutter_plugin_updated`
+* **Ήχος:** `audioplayers`
+* **Δόνηση:** `vibration`
+* **Δικαιώματα (Permissions):** `permission_handler`
+
+## Ξεκινώντας (Getting Started)
+
+Αυτό το project αποτελεί σημείο εκκίνησης για μια εφαρμογή Flutter.
+
+Για βοήθεια σχετικά με την έναρξη της ανάπτυξης με Flutter, δείτε την [online τεκμηρίωση](https://docs.flutter.dev/), η οποία προσφέρει εκπαιδευτικά υλικά, παραδείγματα, καθοδήγηση για mobile development και πλήρη αναφορά API.
+
+1.  **Clone το αποθετήριο:**
+    ```bash
+    git clone https://github.com/flyefta/inlib_nav.git
+    cd inlib_nav
+    ```
+2.  **Εγκατάσταση εξαρτήσεων:**
+    ```bash
+    flutter pub get
+    ```
+3.  **Εκτέλεση της εφαρμογής:**
+    ```bash
+    flutter run
+    ```
+
+## Χρήση
+
+1.  Ανοίξτε την εφαρμογή.
+2.  Χρησιμοποιήστε τη γραμμή αναζήτησης για να βρείτε ένα βιβλίο εισάγοντας τίτλο, συγγραφέα, ISBN ή LOC.
+3.  Πατήστε στο αποτέλεσμα που σας ενδιαφέρει για να δείτε τις λεπτομέρειες του βιβλίου και τη θέση του (διάδρομος, ράφι).
+4.  Πατήστε το κουμπί "Πλοήγηση προς το ράφι".
+5.  Στρέψτε την κάμερα της συσκευής προς τις πινακίδες των διαδρόμων.
+6.  Η εφαρμογή θα σας καθοδηγήσει οπτικά και ακουστικά προς τον σωστό διάδρομο και το ράφι.
+
+## Απαιτούμενα Δικαιώματα
+
+Η εφαρμογή απαιτεί τα ακόλουθα δικαιώματα για τη σωστή λειτουργία της:
+
+* **CAMERA:** Για τη σάρωση των πινακίδων των διαδρόμων και τις λειτουργίες AR.
+* **INTERNET:** (Πιθανώς για μελλοντικές λειτουργίες ή λήψη μοντέλων ML).
+* **WRITE\_EXTERNAL\_STORAGE / READ\_EXTERNAL\_STORAGE:** (Ενδέχεται να μην είναι απαραίτητα ανάλογα με την τελική υλοποίηση, αλλά ζητούνται στο `AndroidManifest.xml`).
+
+## (Προαιρετικά) Στιγμιότυπα Οθόνης
+
+*(Προσθέστε εδώ screenshots ή GIFs της εφαρμογής)*
+
+## (Προαιρετικά) Συνεισφορά
+
+*(Προσθέστε οδηγίες για το πώς άλλοι μπορούν να συνεισφέρουν στο project)*
+
+## Άδεια Χρήσης
+
+Αυτό το project διανέμεται υπό την άδεια MIT. Δείτε το αρχείο `LICENSE` για περισσότερες λεπτομέρειες (αν υπάρχει), ή επισκεφθείτε τη σελίδα [MIT License](https://opensource.org/licenses/MIT).

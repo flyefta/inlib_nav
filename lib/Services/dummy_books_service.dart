@@ -38,33 +38,14 @@ int calculateShelfForLOC(String loc) {
 
 // --- Συνάρτηση Υπολογισμού Διάδρομου ---
 String calculateCorridor(int shelf) {
+  String corridorBase = "ΔΙΑΔΡΟΜΟΣ"; // Νέα βάση ονόματος
   if (shelf < 1 || shelf > 10) {
-    return 'Άγνωστος Διάδρομος';
+    return 'Άγνωστος Διάδρομος'; // Ή κάποια άλλη προεπιλογή
   } else {
-    switch (shelf) {
-      case 1:
-        return 'UOWM1';
-      case 2:
-        return 'UOWM1';
-      case 3:
-        return 'UOWM2';
-      case 4:
-        return 'UOWM2';
-      case 5:
-        return 'UOWM3';
-      case 6:
-        return 'UOWM3';
-      case 7:
-        return 'UOWM4';
-      case 8:
-        return 'UOWM4';
-      case 9:
-        return 'UOWM5';
-      case 10:
-        return 'UOWM5';
-      default:
-        return 'Άγνωστος Διάδρομος';
-    }
+    // Απλή αντιστοίχιση 2 ραφιών ανά διάδρομο
+    int corridorNumber =
+        ((shelf - 1) ~/ 2) + 1; // (1,2->1), (3,4->2), (5,6->3), ...
+    return '$corridorBase $corridorNumber'; // Επιστρέφει π.χ., "ΔΙΑΔΡΟΜΟΣ 1"
   }
 }
 

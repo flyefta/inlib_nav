@@ -60,12 +60,12 @@ class TextOverlayPainter extends CustomPainter {
 
     // Δεν ζωγραφίζω πλαίσιο αν δεν βλέπω ούτε σωστό ούτε λάθος στόχο
     if (boxColor != Colors.transparent) {
-      final Paint boxPaint =
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth =
-                4.0 // Λίγο πιο παχύ
-            ..color = boxColor;
+      // final Paint boxPaint =
+      //     Paint()
+      //       ..style = PaintingStyle.stroke
+      //       ..strokeWidth =
+      //           4.0 // Λίγο πιο παχύ
+      //       ..color = boxColor;
 
       final Rect scaledRect = Rect.fromLTRB(
         targetBoundingBox!.left * scaleX + offsetX,
@@ -73,15 +73,7 @@ class TextOverlayPainter extends CustomPainter {
         targetBoundingBox!.right * scaleX + offsetX,
         targetBoundingBox!.bottom * scaleY + offsetY,
       );
-      canvas.drawRect(scaledRect, boxPaint);
-
-      final Paint circlePaint =
-          Paint()
-            ..color = Colors.blue
-            ..style = PaintingStyle.fill; // ή .stroke για περίγραμμα
-      final Offset center = scaledRect.center; // Πάρε το κέντρο του ορθογωνίου
-      final double radius = scaledRect.shortestSide / 2; // Υπολόγισε μια ακτίνα
-      canvas.drawCircle(center, radius, circlePaint);
+      // canvas.drawRect(scaledRect, boxPaint);
 
       // --- Ζωγραφική Εικονιδίου ---
       ui.Image? iconToDraw;

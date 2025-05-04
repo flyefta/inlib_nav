@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:inlib_nav/Model/book.dart';
-// Εισάγουμε τη μετονομασμένη οθόνη σάρωσης
-import 'package:inlib_nav/View/item_scanning_screen.dart';
+import 'package:inlib_nav/View/qr_scanning_screen.dart';
 import 'package:inlib_nav/constants.dart'; // Για τα χρώματα και το AppBar (αν χρησιμοποιούνται)
 
 /// Οθόνη που εμφανίζει τις λεπτομέρειες ενός βιβλίου
@@ -68,7 +67,7 @@ class BookDetailsScreen extends StatelessWidget {
                   MaterialPageRoute(
                     // Δημιουργία και πλοήγηση στην ItemScanningScreen
                     builder:
-                        (context) => ItemScanningScreen(
+                        (context) => QrScanningScreen(
                           // Πέρασμα των απαραίτητων παραμέτρων:
                           targetCorridorLabel:
                               book.corridor, // Η ετικέτα διαδρόμου (π.χ., "ΔΙΑΔΡΟΜΟΣ 1")

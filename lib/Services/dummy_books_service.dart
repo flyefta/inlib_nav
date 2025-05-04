@@ -1,6 +1,6 @@
 import 'package:inlib_nav/Model/book.dart'; // Εισαγωγή του Book model
 
-// --- Δεδομένα Ραφιών από φώτος---
+// --- Δεδομένα Ραφιών από φώτογραφίες---
 
 final List<Map<String, dynamic>> _shelfRanges = [
   {'shelf': 1, 'from': 'b29.h5816.1993', 'to': 'Qa76.575.v3816.2008'},
@@ -38,14 +38,17 @@ int calculateShelfForLOC(String loc) {
 
 // --- Συνάρτηση Υπολογισμού Διάδρομου ---
 String calculateCorridor(int shelf) {
-  String corridorBase = "ΔΙΑΔΡΟΜΟΣ"; // Νέα βάση ονόματος
+  String corridorBase = "ΔΙΑΔΡΟΜΟΣ";
+
   if (shelf < 1 || shelf > 10) {
-    return 'Άγνωστος Διάδρομος'; // Ή κάποια άλλη προεπιλογή
+    // Επιστροφή μιας προεπιλεγμένης τιμής ή χειρισμός σφάλματος
+    // Είναι σημαντικό αυτή η τιμή να μην ταιριάζει με κάποιο πραγματικό label
+    return 'ΑΓΝΩΣΤΟΣ ΔΙΑΔΡΟΜΟΣ';
   } else {
     // Απλή αντιστοίχιση 2 ραφιών ανά διάδρομο
     int corridorNumber =
         ((shelf - 1) ~/ 2) + 1; // (1,2->1), (3,4->2), (5,6->3), ...
-    return '$corridorBase $corridorNumber'; // Επιστρέφει π.χ., "ΔΙΑΔΡΟΜΟΣ 1"
+    return '$corridorBase $corridorNumber'; // π.χ., "ΔΙΑΔΡΟΜΟΣ 1"
   }
 }
 

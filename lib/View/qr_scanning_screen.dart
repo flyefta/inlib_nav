@@ -257,7 +257,7 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
 
     final barcode = barcodes.first;
     final qrDataString = barcode.rawValue;
-    // ΑΦΑΙΡΕΘΗΚΕ η ανάθεση στο _barcodeBoundingBox από εδώ, γίνεται παρακάτω στο setState αν χρειαστεί
+    //! ΑΦΑΙΡΕΣΣΑ την ανάθεση στο _barcodeBoundingBox από εδώ, γίνεται παρακάτω στο setState αν χρειαστεί
     // final qrBoundingBox = barcode.boundingBox;
 
     _resetNotFoundTimerIfNeeded();

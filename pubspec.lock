@@ -246,14 +246,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  flutter_camera:
-    dependency: "direct main"
-    description:
-      name: flutter_camera
-      sha256: "8fb0d476f24e7ee26e40d9604b1e9ddae116810313ad8bca31f91487cabc275b"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.0"
   flutter_lints:
     dependency: "direct dev"
     description:

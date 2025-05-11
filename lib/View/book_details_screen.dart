@@ -65,14 +65,15 @@ class BookDetailsScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    // Δημιουργία και πλοήγηση στην ItemScanningScreen
                     builder:
                         (context) => QrScanningScreen(
-                          // Πέρασμα των απαραίτητων παραμέτρων:
-                          targetCorridorLabel:
-                              book.corridor, // Η ετικέτα διαδρόμου (π.χ., "ΔΙΑΔΡΟΜΟΣ 1")
-                          targetBookLoc: book.loc, // Ο κωδικός LOC
-                          targetShelf: book.shelf, // Ο αριθμός ραφιού (int)
+                          targetCorridorLabel: book.corridor,
+                          targetBookLoc: book.loc,
+                          targetShelf: book.shelf,
+                          // Πέρασε τα νέα στοιχεία εδώ:
+                          bookTitle: book.title,
+                          bookAuthor: book.author,
+                          bookIsbn: book.isbn,
                         ),
                   ),
                 );

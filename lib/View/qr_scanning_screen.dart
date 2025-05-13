@@ -10,8 +10,9 @@ import 'package:provider/provider.dart'; // Για το CameraService
 import 'package:vibration/vibration.dart'; // Για τη δόνηση
 
 import 'package:inlib_nav/Services/camera_service.dart';
-// ! ΣΗΜΑΝΤΙΚΟ: Δεν χρειάζεται να εισάγεις το dummy_books_service.dart εδώ,
-// ! τα στοιχεία του βιβλίου έρχονται ως παράμετροι.
+import 'package:inlib_nav/Services/dummy_books_service.dart';
+import 'package:inlib_nav/constants.dart'; // * ΝΕΟ: Import για την myAppBar
+import 'package:inlib_nav/View/book_found_screen.dart'; // * ΝΕΟ: Import για την οθόνη επιτυχίας
 
 // Οι καταστάσεις λειτουργίας μου: ψάχνω διάδρομο ή ράφι ή έχω σφάλμα.
 enum QrScanningMode { lookingForCorridor, lookingForShelf, error }
@@ -43,82 +44,80 @@ class QrScanningScreen extends StatefulWidget {
 }
 
 class _QrScanningScreenState extends State<QrScanningScreen> {
-  // Χρησιμοποιώ το google_mlkit_barcode_scanning για αναγνώριση QR
+  CameraService? _cameraServiceInstance;
+  // ML Kit Barcode Scanner
   final BarcodeScanner _barcodeScanner = BarcodeScanner();
-  bool _isProcessingQr =
-      false; // Για να μην επεξεργάζομαι πολλά καρέ ταυτόχρονα
+  bool _isProcessingQr = false;
 
+  // Κατάσταση πλοήγησης και UI
   QrScanningMode _currentMode = QrScanningMode.lookingForCorridor;
-  String _uiMessage = ""; // Το μήνυμα που θα δείχνω στον χρήστη
-  Color _feedbackColor = Colors.white; // Το χρώμα του μηνύματος
-
-  // Κρατάω το τελευταίο QR που είδα (μόνο το αντικείμενο Barcode)
+  String _uiMessage = "";
+  Color _feedbackColor = Colors.white;
   Barcode? _lastDetectedBarcode;
 
-  // Για την εκφώνηση οδηγιών
+  // Text-to-Speech (TTS)
   late FlutterTts flutterTts;
   bool _isTtsSpeaking = false;
-  bool _isTtsCoolingDown = false; // Περίοδος αναμονής μετά την εκφώνηση
+  bool _isTtsCoolingDown = false;
   Timer? _ttsCooldownTimer;
-  final Duration _ttsCooldownDuration = const Duration(
-    seconds: 5,
-  ); // 5 δευτερόλεπτα αναμονή
+  final Duration _ttsCooldownDuration = const Duration(seconds: 5);
 
-  // Για την περίπτωση που δεν βρίσκω QR code για πολλή ώρα
+  // Timer για μη εύρεση QR
   Timer? _notFoundTimer;
   bool _notFoundMessageSpoken = false;
-  final int _notFoundTimeoutSeconds = 20; // 20 δευτερόλεπτα timeout
+  final int _notFoundTimeoutSeconds = 20;
 
-  // Βοηθητικές μεταβλητές για τη λογική της πλοήγησης
-  bool _wasCorrectCorridorFound =
-      false; // Αν βρήκα τον σωστό διάδρομο έστω μία φορά
-  bool _wasCorrectShelfFound = false; // Αν βρήκα το σωστό ράφι έστω μία φορά
-  bool _corridorVibrationPlayedForThisDetection =
-      false; // Για να παίζει η δόνηση μία φορά ανά εντοπισμό διαδρόμου
+  // Βοηθητικές μεταβλητές πλοήγησης
+  bool _wasCorrectCorridorFound = false;
+  bool _wasCorrectShelfFound = false; // Θα γίνει true όταν βρεθεί το σωστό ράφι
+  bool _corridorVibrationPlayedForThisDetection = false;
+  bool _finalTargetFoundAndHandled = false;
 
-  // Το prefix που περιμένω στα QR codes της εφαρμογής μου
-  // Μπορείς να το αλλάξεις αν τα QR σου έχουν κάποιο άλλο συγκεκριμένο pattern
-  // ή αν δεν θέλεις να βασιστείς σε prefix αλλά μόνο στο πεδίο 'type'.
-  // Για τώρα, θα ελέγχω μόνο την ύπαρξη του πεδίου 'type'.
-  // final String _appQrPrefix = "inlib_nav::"; // Παράδειγμα prefix
+  // * ΝΕΕΣ ΜΕΤΑΒΛΗΤΕΣ ΓΙΑ ΤΟΝ ΧΡΟΝΟ
+  DateTime? _startTime; // Χρόνος έναρξης αναζήτησης από αυτή την οθόνη
+  DateTime? _shelfFoundTime; // Χρόνος που βρέθηκε το σωστό ράφι
+  Duration? _timeToFindShelf; // Διάρκεια αναζήτησης
+
+  DateTime _lastProcessedFrameTime = DateTime.now().subtract(
+    const Duration(seconds: 1),
+  );
+  final Duration _frameProcessingInterval = const Duration(milliseconds: 200);
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _cameraServiceInstance ??= Provider.of<CameraService>(
+      context,
+      listen: false,
+    );
+  }
 
   @override
   void initState() {
     super.initState();
-    // Αρχικοποιώ το TTS
+    _startTime = DateTime.now(); // * ΟΡΙΣΜΟΣ ΤΟΥ START TIME
     flutterTts = FlutterTts();
     _initializeTts();
 
-    // Παίρνω το CameraService μέσω Provider
     final cameraService = context.read<CameraService>();
-    // Ξεκινάω την κάμερα
     _initializeCameraSystem(cameraService);
 
-    // Θέτω το αρχικό μήνυμα στο UI
     _setUiMessageForMode();
-    // Ξεκινάω το χρονόμετρο για την περίπτωση που δεν βρεθεί QR
     _startNotFoundTimer();
   }
 
-  // Αρχικοποιώ το σύστημα της κάμερας (άδειες, controller)
   Future<void> _initializeCameraSystem(CameraService cameraService) async {
-    bool granted = await cameraService.requestPermission(); // Ζητάω άδεια
+    bool granted = await cameraService.requestPermission();
     if (granted && mounted) {
-      // Αν μου δόθηκε η άδεια και το widget είναι ακόμα στο δέντρο
       await cameraService.initializeController(
-        resolutionPreset:
-            ResolutionPreset.medium, // Μέτρια ανάλυση αρκεί για QR
-        onImageAvailable:
-            _processCameraImage, // Η συνάρτηση που θα καλείται για κάθε καρέ
+        resolutionPreset: ResolutionPreset.medium,
+        onImageAvailable: _processCameraImage,
       );
-      // Αν η κάμερα αρχικοποιήθηκε και δεν κάνει ήδη stream, το ξεκινάω
       if (mounted &&
           cameraService.isInitialized &&
           !cameraService.isStreamingImages) {
         await cameraService.startImageStream(_processCameraImage);
       }
     } else if (!granted && mounted) {
-      // Αν δεν μου δόθηκε η άδεια
       setState(() {
         _currentMode = QrScanningMode.error;
         _setUiMessageForMode(error: "Η άδεια κάμερας είναι απαραίτητη.");
@@ -126,37 +125,23 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
     }
   }
 
-  // Αρχικοποιώ τις ρυθμίσεις του Text-to-Speech
   Future<void> _initializeTts() async {
-    await flutterTts.setLanguage("el-GR"); // Ελληνικά
-    await flutterTts.setSpeechRate(0.5); // Ταχύτητα ομιλίας
-    await flutterTts.setPitch(1.0); // Τόνος φωνής
+    await flutterTts.setLanguage("el-GR");
+    await flutterTts.setSpeechRate(0.5);
+    await flutterTts.setPitch(1.0);
 
-    // Ορίζω handlers για την κατάσταση του TTS
     flutterTts.setStartHandler(() {
-      if (mounted) {
-        setState(() {
-          _isTtsSpeaking = true;
-          _isTtsCoolingDown =
-              true; // Ξεκινάει και το cooldown μαζί με την ομιλία
-        });
-      }
+      if (mounted) setState(() => _isTtsSpeaking = true);
     });
 
     flutterTts.setCompletionHandler(() {
       if (mounted) {
-        setState(() {
-          _isTtsSpeaking = false;
-          // Όταν τελειώσει η ομιλία, ξεκινάει ο timer για το cooldown
-          _ttsCooldownTimer?.cancel();
-          _ttsCooldownTimer = Timer(_ttsCooldownDuration, () {
-            if (mounted) {
-              setState(() {
-                _isTtsCoolingDown = false; // Τέλος cooldown
-              });
-            }
-            debugPrint("TTS Cooldown Finished");
-          });
+        setState(() => _isTtsSpeaking = false);
+        _ttsCooldownTimer?.cancel();
+        _isTtsCoolingDown = true;
+        _ttsCooldownTimer = Timer(_ttsCooldownDuration, () {
+          if (mounted) setState(() => _isTtsCoolingDown = false);
+          debugPrint("TTS Cooldown Finished");
         });
         debugPrint("TTS Completed, Starting Cooldown Timer");
       }
@@ -165,7 +150,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
     flutterTts.setErrorHandler((msg) {
       debugPrint("TTS Error: $msg");
       if (mounted) {
-        // Αν γίνει λάθος, ακυρώνω την ομιλία και το cooldown
         setState(() {
           _isTtsSpeaking = false;
           _isTtsCoolingDown = false;
@@ -177,213 +161,205 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
 
   @override
   void dispose() {
-    // Καθαρίζω τους πόρους όταν φεύγω από την οθόνη
+    debugPrint("Disposing QrScanningScreen");
     _notFoundTimer?.cancel();
     _ttsCooldownTimer?.cancel();
     flutterTts.stop();
     _barcodeScanner.close();
-    // Το CameraService ΔΕΝ το κάνω dispose εδώ, γιατί είναι ChangeNotifierProvider
-    // και μπορεί να χρησιμοποιείται και από άλλες οθόνες ή να θέλω να διατηρήσω
-    // την κατάστασή του. Η διαχείρισή του γίνεται στο main.dart.
+    try {
+      if (_cameraServiceInstance != null &&
+          _cameraServiceInstance!.isInitialized &&
+          _cameraServiceInstance!.isStreamingImages) {
+        _cameraServiceInstance!.stopImageStream().catchError((e) {
+          debugPrint(
+            "Error stopping image stream in dispose for QrScanningScreen: $e",
+          );
+        });
+        debugPrint("Image stream stop requested for QrScanningScreen");
+      }
+    } catch (e) {
+      debugPrint(
+        "Error accessing CameraService in dispose for QrScanningScreen: $e",
+      );
+    }
     super.dispose();
+    debugPrint("QrScanningScreen disposed successfully");
   }
 
-  // Ξεκινάω το χρονόμετρο που θα με ειδοποιήσει αν δεν βρω QR για πολλή ώρα
   void _startNotFoundTimer() {
-    _notFoundTimer?.cancel(); // Ακυρώνω τυχόν προηγούμενο
+    _notFoundTimer?.cancel();
     _notFoundMessageSpoken = false;
     _notFoundTimer = Timer(Duration(seconds: _notFoundTimeoutSeconds), () {
-      // Αν περάσει ο χρόνος και δεν έχω βρει κάτι και δεν έχω μιλήσει ήδη
       if (mounted &&
           !_notFoundMessageSpoken &&
-          _lastDetectedBarcode == null && // Έλεγχος αν έχω δει κάποιο barcode
-          !_wasCorrectShelfFound) {
-        // Και δεν έχω βρει το τελικό ράφι
+          _lastDetectedBarcode == null &&
+          !_wasCorrectShelfFound && // Χρησιμοποιούμε την _wasCorrectShelfFound
+          !_finalTargetFoundAndHandled) {
         String msg =
             _currentMode == QrScanningMode.lookingForCorridor
-                ? "Δεν εντοπίστηκε QR code διαδρόμου. Παρακαλώ, ελέγξτε την περιοχή γύρω σας."
-                : "Δεν εντοπίστηκε QR code ραφιού. Βεβαιωθείτε ότι βρίσκεστε στη σωστή πλευρά του διαδρόμου.";
-        _speak(msg); // Εκφωνώ το μήνυμα
+                ? "Δεν εντοπίστηκε QR code διαδρόμου. Ελέγξτε την περιοχή."
+                : "Δεν εντοπίστηκε QR code ραφιού. Είστε στη σωστή πλευρά;";
+        _speak(msg);
         if (mounted) {
           setState(() {
             _notFoundMessageSpoken = true;
             _uiMessage = msg;
-            _feedbackColor = Colors.grey; // Γκρι χρώμα για το μήνυμα
+            _feedbackColor = Colors.grey;
           });
         }
       }
     });
   }
 
-  // Επαναφέρω το χρονόμετρο αν χρειαστεί (π.χ. αν είδα ένα QR αλλά δεν ήταν το σωστό)
   void _resetNotFoundTimerIfNeeded() {
-    if (_notFoundMessageSpoken) {
-      _notFoundMessageSpoken = false;
-    }
+    if (_notFoundMessageSpoken) _notFoundMessageSpoken = false;
     _notFoundTimer?.cancel();
-    if (!_wasCorrectShelfFound) {
-      // Αν δεν έχω βρει το τελικό ράφι, το ξαναξεκινάω
+    if (!_finalTargetFoundAndHandled) {
       _startNotFoundTimer();
     }
   }
 
-  // Ακυρώνω όλα τα χρονόμετρα (TTS cooldown, not found)
   void _cancelAllTimers() {
     _ttsCooldownTimer?.cancel();
     _notFoundTimer?.cancel();
-    _notFoundMessageSpoken = false;
+    if (mounted) _notFoundMessageSpoken = false;
   }
 
-  // Επεξεργάζομαι το κάθε καρέ από την κάμερα
   Future<void> _processCameraImage(CameraImage image) async {
-    final cameraService = Provider.of<CameraService>(context, listen: false);
-    // Αν επεξεργάζομαι ήδη, ή το widget δεν είναι στο δέντρο, ή η κάμερα δεν είναι έτοιμη, δεν κάνω τίποτα
-    if (_isProcessingQr || !mounted || !cameraService.isInitialized) return;
-
-    _isProcessingQr = true; // Σημαδεύω ότι ξεκίνησα επεξεργασία
-
+    if (!mounted || _isProcessingQr || _finalTargetFoundAndHandled) return;
+    final now = DateTime.now();
+    if (now.difference(_lastProcessedFrameTime) < _frameProcessingInterval) {
+      return;
+    }
+    _lastProcessedFrameTime = now;
+    _isProcessingQr = true;
+    final cameraService = _cameraServiceInstance;
+    if (cameraService == null || !cameraService.isInitialized) {
+      _isProcessingQr = false;
+      return;
+    }
     final sensorOrientation = cameraService.sensorOrientation;
     if (sensorOrientation == null) {
       _isProcessingQr = false;
-      return; // Χρειάζομαι τον προσανατολισμό του αισθητήρα
+      debugPrint("Sensor orientation is null, cannot process QR image.");
+      return;
     }
-
-    // Μετατρέπω το CameraImage σε InputImage για το ML Kit
     final inputImage = _inputImageFromCameraImage(image, sensorOrientation);
-
     if (inputImage != null) {
       try {
-        // Στέλνω το InputImage στον BarcodeScanner
         final List<Barcode> barcodes = await _barcodeScanner.processImage(
           inputImage,
         );
         if (mounted) {
-          // Αν βρέθηκαν barcodes, τα επεξεργάζομαι
           _processBarcodes(barcodes);
         }
       } catch (e) {
-        debugPrint("Barcode Scanner Error: $e");
+        debugPrint("Barcode Scanner Error during processing: $e");
       } finally {
         if (mounted) {
-          _isProcessingQr = false; // Σημαδεύω ότι τελείωσα την επεξεργασία
+          _isProcessingQr = false;
         }
       }
     } else {
       if (mounted) {
         _isProcessingQr = false;
       }
+      debugPrint("InputImage for QR scanning was null.");
     }
   }
 
-  // Βοηθητική συνάρτηση για να πάρω τον αριθμό του διαδρόμου από το label
   int? _parseCorridorNumber(String? label) {
     if (label == null) return null;
-    // Ψάχνω για "ΔΙΑΔΡΟΜΟΣ" ακολουθούμενο από έναν ή περισσότερους αριθμούς
     final match = RegExp(
       r'ΔΙΑΔΡΟΜΟΣ\s*(\d+)',
       caseSensitive: false,
     ).firstMatch(label);
-    if (match != null && match.group(1) != null) {
-      return int.tryParse(match.group(1)!); // Επιστρέφω τον αριθμό
-    }
-    return null;
+    return (match != null && match.group(1) != null)
+        ? int.tryParse(match.group(1)!)
+        : null;
   }
 
-  // Επεξεργάζομαι τα barcodes που βρήκα
   void _processBarcodes(List<Barcode> barcodes) {
+    if (_finalTargetFoundAndHandled) return;
+
     if (barcodes.isEmpty) {
-      // Αν δεν βλέπω QR code τώρα, αλλά είχα δει προηγουμένως, επαναφέρω την κατάσταση
       if (_lastDetectedBarcode != null ||
           _wasCorrectCorridorFound ||
-          _wasCorrectShelfFound ||
+          // _wasCorrectShelfFound δεν το μηδενίζουμε εδώ αν έχει γίνει true
           _corridorVibrationPlayedForThisDetection) {
         if (mounted) {
           setState(() {
             _lastDetectedBarcode = null;
-            _wasCorrectCorridorFound = false;
-            _wasCorrectShelfFound = false;
+            // Δεν μηδενίζουμε το _wasCorrectCorridorFound αν το _wasCorrectShelfFound είναι true
+            if (!_wasCorrectShelfFound) {
+              _wasCorrectCorridorFound = false;
+            }
             _corridorVibrationPlayedForThisDetection = false;
-            _setUiMessageForMode(); // Θέτω το μήνυμα ανάλογα την κατάσταση πλοήγησης
-            _resetNotFoundTimerIfNeeded(); // Επανεκκινώ το χρονόμετρο "not found"
+            if (!_wasCorrectShelfFound) {
+              // Ενημερώνουμε το μήνυμα μόνο αν δεν έχει βρεθεί το ράφι
+              _setUiMessageForMode();
+            }
+            _resetNotFoundTimerIfNeeded();
           });
         }
       }
-      return; // Δεν βρέθηκε κανένα barcode
+      return;
     }
 
-    final barcode = barcodes.first; // Παίρνω το πρώτο barcode που βρέθηκε
-    final qrDataString = barcode.rawValue; // Τα δεδομένα του QR ως string
-
-    _resetNotFoundTimerIfNeeded(); // Είδα ένα QR, οπότε κάνω reset τον timer
-
-    if (qrDataString == null) return; // Αν δεν έχει δεδομένα, δεν κάνω κάτι
+    final barcode = barcodes.first;
+    final qrDataString = barcode.rawValue;
+    _resetNotFoundTimerIfNeeded();
+    if (qrDataString == null) return;
 
     Map<String, dynamic>? qrData;
-    bool isAppQr = false; // Σημαία για το αν το QR ανήκει στην εφαρμογή
-
+    bool isAppQr = false;
     try {
-      qrData = jsonDecode(qrDataString); // Προσπαθώ να το κάνω decode ως JSON
-      // Ελέγχω αν το JSON έχει το πεδίο 'type', που σηματοδοτεί ότι είναι QR της εφαρμογής
-      if (qrData != null && qrData.containsKey('type')) {
-        isAppQr = true;
-      }
+      qrData = jsonDecode(qrDataString);
+      if (qrData != null && qrData.containsKey('type')) isAppQr = true;
     } catch (e) {
-      // Αν δεν είναι έγκυρο JSON, ή γίνει κάποιο άλλο σφάλμα, δεν είναι της εφαρμογής
-      debugPrint(
-        "QR Data is not valid JSON or processing error: '$qrDataString'. Error: $e",
-      );
       isAppQr = false;
-      qrData = null; // Σιγουρεύομαι ότι το qrData είναι null
+      qrData = null;
     }
 
-    // Μεταβλητές για την ενημέρωση του UI και του TTS
     bool stateChanged = false;
     String currentUiMessage = _uiMessage;
     Color currentFeedbackColor = _feedbackColor;
-    bool currentCorrectCorridor =
-        _wasCorrectCorridorFound; // Διατηρώ την προηγούμενη κατάσταση
-    bool currentCorrectShelf =
-        _wasCorrectShelfFound; // Διατηρώ την προηγούμενη κατάσταση
+    bool tempCorrectCorridorFound = _wasCorrectCorridorFound;
+    // bool tempCorrectShelfFound = _wasCorrectShelfFound; // Δεν το χρειαζόμαστε πλέον εδώ άμεσα
     String? ttsMessageToSpeak;
 
     if (!isAppQr) {
-      // Αν το QR ΔΕΝ ανήκει στην εφαρμογή
       currentUiMessage = "Αυτό το QR code δεν αφορά την εφαρμογή.";
-      currentFeedbackColor = Colors.orange; // Πορτοκαλί χρώμα για προειδοποίηση
+      currentFeedbackColor = Colors.orange;
       ttsMessageToSpeak = "Αυτό το QR code δεν αφορά την εφαρμογή.";
-      // Δεν αλλάζω τις _wasCorrectCorridorFound, _wasCorrectShelfFound
-      // Δεν θέλω να χάσω την πρόοδο αν κατά λάθος σκάναρα ένα άσχετο QR
     } else if (qrData != null) {
-      // Αν το QR ανήκει στην εφαρμογή και έχω τα δεδομένα του
       final qrType = qrData['type'];
 
       if (qrType == 'corridor') {
         String? scannedLabel = qrData['label'];
         if (scannedLabel != null &&
             scannedLabel == widget.targetCorridorLabel) {
-          // Βρήκα τον ΣΩΣΤΟ ΔΙΑΔΡΟΜΟ
-          currentCorrectCorridor = true;
+          tempCorrectCorridorFound = true;
           currentFeedbackColor = Colors.cyanAccent;
           String shelfSide =
               widget.targetShelf % 2 != 0 ? "στα αριστερά" : "στα δεξιά";
           currentUiMessage =
               "Βρέθηκε ο $scannedLabel.\nΤο Ράφι ${widget.targetShelf} είναι $shelfSide σας.\nΣαρώστε το QR του Ραφιού.";
           if (!_corridorVibrationPlayedForThisDetection) {
-            Vibration.vibrate(duration: 150); // Δόνηση!
+            Vibration.vibrate(duration: 150);
             _corridorVibrationPlayedForThisDetection = true;
           }
-          // Αν ήμουν σε κατάσταση αναζήτησης διαδρόμου, αλλάζω σε αναζήτηση ραφιού
           if (_currentMode == QrScanningMode.lookingForCorridor) {
             ttsMessageToSpeak =
                 "Βρέθηκε ο $scannedLabel. Το ράφι ${widget.targetShelf} είναι $shelfSide σας. Σαρώστε το QR code του ραφιού.";
             _currentMode = QrScanningMode.lookingForShelf;
           } else {
-            // Αν ήδη έψαχνα ράφι (π.χ. σάρωσα ξανά τον ίδιο διάδρομο), απλά το επιβεβαιώνω
-            ttsMessageToSpeak = "Σωστός διάδρομος: $scannedLabel.";
+            ttsMessageToSpeak =
+                "Σωστός διάδρομος: $scannedLabel. Σαρώστε το QR code του ραφιού";
           }
         } else if (scannedLabel != null) {
-          // Βρήκα ΛΑΘΟΣ ΔΙΑΔΡΟΜΟ
-          currentCorrectCorridor = false; // Δεν είναι ο σωστός
+          tempCorrectCorridorFound = false;
+          _corridorVibrationPlayedForThisDetection = false;
           final int? targetNumber = _parseCorridorNumber(
             widget.targetCorridorLabel,
           );
@@ -391,7 +367,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
           String baseMsg = "Λάθος Διάδρομος";
           String directionMsg = "";
           if (targetNumber != null && scannedNumber != null) {
-            // Υπολογίζω την κατεύθυνση προς τον σωστό διάδρομο
             final diff = targetNumber - scannedNumber;
             if (diff != 0) {
               final direction = diff > 0 ? "μετά" : "πριν";
@@ -402,139 +377,210 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
             }
           }
           currentUiMessage = "$baseMsg ($scannedLabel).$directionMsg";
-          ttsMessageToSpeak = "$baseMsg. $directionMsg";
+          ttsMessageToSpeak = "$baseMsg.$directionMsg";
           currentFeedbackColor = Colors.orangeAccent;
-          _corridorVibrationPlayedForThisDetection =
-              false; // Reset για τη δόνηση
         }
       } else if (qrType == 'shelf') {
-        // Αν σάρωσα QR ΡΑΦΙΟΥ
-        if (_currentMode == QrScanningMode.lookingForCorridor) {
-          // Αν ακόμα έψαχνα διάδρομο, του λέω να σκανάρει πρώτα τον διάδρομο
-          currentUiMessage =
-              "Είδα Ράφι. Σάρωσε πρώτα το QR του διαδρόμου ${widget.targetCorridorLabel}.";
-          currentFeedbackColor = Colors.grey;
-        } else {
-          // Αν ήμουν σε κατάσταση αναζήτησης ραφιού (δηλαδή έχω βρει τον σωστό διάδρομο)
-          String? startLoc = qrData['loc_start'];
-          String? endLoc = qrData['loc_end'];
-          int? shelfNum =
-              qrData['shelf_number']; // Παίρνω και τον αριθμό του ραφιού από το QR
+        String? scannedShelfLocStart = qrData['loc_start'];
+        String? scannedShelfLocEnd = qrData['loc_end'];
+        int? scannedShelfNum = qrData['shelf_number'];
 
-          // Έλεγχος αν ο αριθμός ραφιού του QR ταιριάζει με τον στόχο μου
-          if (shelfNum != null && shelfNum == widget.targetShelf) {
-            if (startLoc != null && endLoc != null) {
-              // Ελέγχω αν το LoC του βιβλίου είναι εντός του εύρους του ραφιού
-              bool isInRange = isLocInRange(
-                widget.targetBookLoc,
-                startLoc,
-                endLoc,
-              );
-              if (isInRange) {
-                // ΒΡΗΚΑ ΤΟ ΣΩΣΤΟ ΡΑΦΙ ΚΑΙ ΤΟ ΒΙΒΛΙΟ ΕΙΝΑΙ ΕΔΩ!
-                currentCorrectShelf = true;
-                currentFeedbackColor = Colors.lightGreenAccent;
-                currentUiMessage =
-                    "ΤΟ ΒΙΒΛΙΟ ΕΙΝΑΙ ΕΔΩ!\nΡάφι ${widget.targetShelf} (${widget.targetCorridorLabel})\nΚωδικός: ${widget.targetBookLoc}";
-                ttsMessageToSpeak = "Το βιβλίο βρίσκεται σε αυτό το ράφι.";
-                Vibration.vibrate(
-                  duration: 300,
-                  amplitude: 192,
-                ); // Μεγαλύτερη δόνηση!
-                _cancelAllTimers(); // Σταματάω τα πάντα, η πλοήγηση ολοκληρώθηκε
+        if (scannedShelfNum != null) {
+          String actualCorridorOfScannedShelf = calculateCorridor(
+            scannedShelfNum,
+          );
+
+          if (_currentMode == QrScanningMode.lookingForCorridor) {
+            if (actualCorridorOfScannedShelf == widget.targetCorridorLabel) {
+              _currentMode = QrScanningMode.lookingForShelf;
+              tempCorrectCorridorFound = true;
+              // _wasCorrectCorridorFound = true; // Θα γίνει set παρακάτω
+              if (!_corridorVibrationPlayedForThisDetection) {
+                Vibration.vibrate(duration: 150);
+                _corridorVibrationPlayedForThisDetection = true;
+              }
+
+              if (scannedShelfNum == widget.targetShelf) {
+                if (scannedShelfLocStart != null &&
+                    scannedShelfLocEnd != null) {
+                  bool isInRange = isLocInRange(
+                    widget.targetBookLoc,
+                    scannedShelfLocStart,
+                    scannedShelfLocEnd,
+                  );
+                  if (isInRange) {
+                    // * ΕΝΤΟΠΙΣΜΟΣ ΣΩΣΤΟΥ ΡΑΦΙΟΥ
+                    if (!_wasCorrectShelfFound) {
+                      // Έλεγχος για να εκτελεστεί μία φορά
+                      _wasCorrectShelfFound =
+                          true; // Ορίζουμε ότι το ράφι βρέθηκε
+                      _shelfFoundTime ??= DateTime.now();
+                      if (_startTime != null && _shelfFoundTime != null) {
+                        _timeToFindShelf = _shelfFoundTime!.difference(
+                          _startTime!,
+                        );
+                      }
+                      currentFeedbackColor = Colors.lightGreenAccent;
+                      currentUiMessage =
+                          "ΤΟ ΒΙΒΛΙΟ ΕΙΝΑΙ ΕΔΩ!\nΡάφι ${widget.targetShelf} (${widget.targetCorridorLabel})\nΚωδικός: ${widget.targetBookLoc}\nΠατήστε 'Ολοκλήρωση'.";
+                      ttsMessageToSpeak =
+                          "Το βιβλίο βρίσκεται σε αυτό το ράφι. Όταν το εντοπίσετε πατήστε το κουμπί ολοκλήρωση .";
+                      Vibration.vibrate(duration: 300, amplitude: 192);
+                      _cancelAllTimers();
+                      _finalTargetFoundAndHandled = true;
+                      stateChanged = true; // Σημαντικό για να φανεί το κουμπί
+                    }
+                  } else {
+                    // _wasCorrectShelfFound = false; // Δεν χρειάζεται, παραμένει false αν δεν ήταν ήδη true
+                    currentFeedbackColor = Colors.yellowAccent;
+                    currentUiMessage =
+                        "Ράφι ${widget.targetShelf} (${widget.targetCorridorLabel}). Το βιβλίο δεν είναι σε αυτό το εύρος LoC ($scannedShelfLocStart - $scannedShelfLocEnd).";
+                    ttsMessageToSpeak =
+                        "Σωστό ράφι και διάδρομος, αλλά το βιβλίο δεν ανήκει εδώ.";
+                  }
+                } else {
+                  // _wasCorrectShelfFound = false;
+                  currentFeedbackColor = Colors.redAccent;
+                  currentUiMessage =
+                      "Σφάλμα QR ραφιού (${widget.targetShelf}): Λείπει το εύρος LoC.";
+                  ttsMessageToSpeak =
+                      "Σφάλμα στα δεδομένα του QR code του ραφιού.";
+                }
               } else {
-                // Λάθος εύρος LoC στο σωστό ράφι (λογικά δεν θα έπρεπε να συμβεί αν τα QR είναι σωστά)
-                currentCorrectShelf = false;
-                currentUiMessage =
-                    "Σωστό Ράφι (${widget.targetShelf}), αλλά λάθος εύρος LoC.\nΑυτό περιέχει: $startLoc - $endLoc.\nΨάχνετε: ${widget.targetBookLoc}.\nΕλέγξτε τα δεδομένα.";
-                ttsMessageToSpeak =
-                    "Σωστό ράφι, αλλά το βιβλίο δεν ανήκει εδώ. Ελέγξτε τα δεδομένα.";
+                // _wasCorrectShelfFound = false;
                 currentFeedbackColor = Colors.yellowAccent;
+                String shelfSideTarget =
+                    widget.targetShelf % 2 != 0 ? "στα αριστερά" : "στα δεξιά";
+                currentUiMessage =
+                    "Σωστός Διάδρομος (${widget.targetCorridorLabel}).\nΑυτό είναι το Ράφι $scannedShelfNum.\nΨάχνετε το Ράφι ${widget.targetShelf} ($shelfSideTarget σας).";
+                ttsMessageToSpeak =
+                    "Σωστός Διάδρομος. Αυτό είναι το Ράφι $scannedShelfNum. Ψάχνετε το Ράφι ${widget.targetShelf}.";
               }
             } else {
-              // Το QR του ραφιού δεν έχει loc_start ή loc_end (πρόβλημα δεδομένων)
-              currentCorrectShelf = false;
+              tempCorrectCorridorFound = false;
+              currentFeedbackColor = Colors.orangeAccent;
+              _corridorVibrationPlayedForThisDetection = false;
               currentUiMessage =
-                  "Σφάλμα στα δεδομένα του QR ραφιού (λείπει το εύρος LoC).";
-              ttsMessageToSpeak = "Σφάλμα στα δεδομένα του QR code του ραφιού.";
-              currentFeedbackColor = Colors.redAccent;
+                  "Λάθος Διάδρομος.\nΑυτό το ράφι ($scannedShelfNum) είναι στον $actualCorridorOfScannedShelf.\nΠηγαίνετε στον ${widget.targetCorridorLabel}.";
+              ttsMessageToSpeak =
+                  "Λάθος Διάδρομος. Αυτό το ράφι βρίσκεται στον $actualCorridorOfScannedShelf. Πρέπει να μεταβείτε στον ${widget.targetCorridorLabel}.";
             }
-          } else if (shelfNum != null) {
-            // Λάθος αριθμός ραφιού
-            currentCorrectShelf = false;
-            currentUiMessage =
-                "Λάθος Ράφι (είδα το $shelfNum, ψάχνω το ${widget.targetShelf}).\nΣυνεχίστε στην ίδια πλευρά του διαδρόμου.";
-            ttsMessageToSpeak = "Λάθος ράφι. Συνεχίστε τη σάρωση.";
-            currentFeedbackColor = Colors.yellowAccent;
           } else {
-            // Το QR του ραφιού δεν έχει αριθμό (πρόβλημα δεδομένων)
-            currentCorrectShelf = false;
-            currentUiMessage =
-                "Σφάλμα στα δεδομένα του QR ραφιού (λείπει ο αριθμός ραφιού).";
-            ttsMessageToSpeak = "Σφάλμα στα δεδομένα του QR code του ραφιού.";
-            currentFeedbackColor = Colors.redAccent;
+            // _currentMode == QrScanningMode.lookingForShelf
+            if (scannedShelfNum == widget.targetShelf) {
+              if (scannedShelfLocStart != null && scannedShelfLocEnd != null) {
+                bool isInRange = isLocInRange(
+                  widget.targetBookLoc,
+                  scannedShelfLocStart,
+                  scannedShelfLocEnd,
+                );
+                if (isInRange) {
+                  // * ΕΝΤΟΠΙΣΜΟΣ ΣΩΣΤΟΥ ΡΑΦΙΟΥ
+                  if (!_wasCorrectShelfFound) {
+                    _wasCorrectShelfFound = true;
+                    _shelfFoundTime ??= DateTime.now();
+                    if (_startTime != null && _shelfFoundTime != null) {
+                      _timeToFindShelf = _shelfFoundTime!.difference(
+                        _startTime!,
+                      );
+                    }
+                    currentFeedbackColor = Colors.lightGreenAccent;
+                    currentUiMessage =
+                        "ΤΟ ΒΙΒΛΙΟ ΕΙΝΑΙ ΕΔΩ!\nΡάφι ${widget.targetShelf} (${widget.targetCorridorLabel})\nΚωδικός: ${widget.targetBookLoc}\nΠατήστε 'Ολοκλήρωση'.";
+                    ttsMessageToSpeak =
+                        "Το βιβλίο βρίσκεται σε αυτό το ράφι. Πατήστε ολοκλήρωση.";
+                    Vibration.vibrate(duration: 300, amplitude: 192);
+                    _cancelAllTimers();
+                    _finalTargetFoundAndHandled = true;
+                    stateChanged = true;
+                  }
+                } else {
+                  // _wasCorrectShelfFound = false;
+                  currentFeedbackColor = Colors.yellowAccent;
+                  currentUiMessage =
+                      "Σωστό Ράφι (${widget.targetShelf}), αλλά λάθος εύρος LoC.\nΠεριέχει: $scannedShelfLocStart - $scannedShelfLocEnd.\nΨάχνετε: ${widget.targetBookLoc}.";
+                  ttsMessageToSpeak =
+                      "Σωστό ράφι, αλλά το βιβλίο δεν ανήκει εδώ. Ελέγξτε τα δεδομένα.";
+                }
+              } else {
+                // _wasCorrectShelfFound = false;
+                currentFeedbackColor = Colors.redAccent;
+                currentUiMessage =
+                    "Σφάλμα QR ραφιού (${widget.targetShelf}): Λείπει το εύρος LoC.";
+                ttsMessageToSpeak =
+                    "Σφάλμα στα δεδομένα του QR code του ραφιού.";
+              }
+            } else {
+              // _wasCorrectShelfFound = false;
+              currentFeedbackColor = Colors.yellowAccent;
+              currentUiMessage =
+                  "Λάθος Ράφι (είδα το $scannedShelfNum, ψάχνω το ${widget.targetShelf}).\nΣυνεχίστε στην άλλη πλευρά του διαδρόμου.";
+              ttsMessageToSpeak =
+                  "Λάθος ράφι. Σαρώστε την άλλη πλευρά του διαδρόμου.";
+            }
           }
+        } else {
+          // _wasCorrectShelfFound = false;
+          currentFeedbackColor = Colors.redAccent;
+          currentUiMessage = "Σφάλμα QR ραφιού: Λείπει ο αριθμός ραφιού.";
+          ttsMessageToSpeak = "Σφάλμα στα δεδομένα του QR code του ραφιού.";
         }
       } else {
-        // Άγνωστος τύπος 'type' στο QR code της εφαρμογής
         currentUiMessage = "Άγνωστος τύπος QR Code της εφαρμογής: '$qrType'.";
         currentFeedbackColor = Colors.redAccent;
         ttsMessageToSpeak = "Άγνωστος τύπος κωδικού QR.";
       }
     }
-    // --- Τέλος επεξεργασίας έγκυρου QR ---
 
-    // Ενημερώνω το state αν κάτι άλλαξε
-    if (_lastDetectedBarcode !=
-            barcode || // Αν είναι διαφορετικό QR από το προηγούμενο
+    if (_lastDetectedBarcode != barcode ||
         _uiMessage != currentUiMessage ||
         _feedbackColor != currentFeedbackColor ||
-        _wasCorrectCorridorFound != currentCorrectCorridor ||
-        _wasCorrectShelfFound != currentCorrectShelf) {
+        _wasCorrectCorridorFound != tempCorrectCorridorFound ||
+        _wasCorrectShelfFound !=
+            _wasCorrectShelfFound /* Ελέγχουμε την πραγματική τιμή εδώ */ ) {
       stateChanged = true;
       _uiMessage = currentUiMessage;
       _feedbackColor = currentFeedbackColor;
-      _wasCorrectCorridorFound = currentCorrectCorridor;
-      _wasCorrectShelfFound = currentCorrectShelf;
-      _lastDetectedBarcode = barcode; // Αποθηκεύω το τρέχον barcode
+      _wasCorrectCorridorFound = tempCorrectCorridorFound;
+      // Η _wasCorrectShelfFound ενημερώνεται απευθείας παραπάνω
+      _lastDetectedBarcode = barcode;
     }
 
-    // Αν δεν βρήκα τον σωστό διάδρομο, αλλά είχα παίξει τη δόνηση, την κάνω reset
-    if (!currentCorrectCorridor) {
-      if (_corridorVibrationPlayedForThisDetection) {
-        _corridorVibrationPlayedForThisDetection = false;
-        stateChanged = true;
-      }
+    if (!_wasCorrectCorridorFound && _corridorVibrationPlayedForThisDetection) {
+      _corridorVibrationPlayedForThisDetection = false;
+      stateChanged = true;
     }
 
-    // Αν έχω μήνυμα για εκφώνηση και το TTS δεν μιλάει ή δεν είναι σε cooldown
     if (ttsMessageToSpeak != null && !_isTtsSpeaking && !_isTtsCoolingDown) {
       _speak(ttsMessageToSpeak);
     } else if (ttsMessageToSpeak != null) {
-      // Αν το TTS είναι απασχολημένο, απλά το γράφω στο debug console
       debugPrint(
         "TTS Skipped: Speaking=$_isTtsSpeaking, CoolingDown=$_isTtsCoolingDown, Message: $ttsMessageToSpeak",
       );
     }
 
-    // Αν κάτι άλλαξε, κάνω setState για να ενημερωθεί το UI
     if (stateChanged && mounted) {
       setState(() {});
     }
   }
 
-  // Θέτω το μήνυμα στο UI ανάλογα την κατάσταση (mode) της πλοήγησης
   void _setUiMessageForMode({String? error}) {
     if (error != null) {
       _uiMessage = "Σφάλμα: $error";
       _feedbackColor = Colors.redAccent;
-      _cancelAllTimers(); // Αν υπάρχει σφάλμα, σταματάω τα χρονόμετρα
+      _cancelAllTimers();
       return;
     }
-    // Αν έχω ήδη ένα μήνυμα από επεξεργασία QR, δεν το αλλάζω εδώ
     if (_lastDetectedBarcode != null &&
         _uiMessage.isNotEmpty &&
         _uiMessage != "Αυτό το QR code δεν αφορά την εφαρμογή.") {
+      // Αν έχουμε ήδη ένα συγκεκριμένο μήνυμα από την επεξεργασία του QR,
+      // και δεν έχει βρεθεί το τελικό ράφι, το διατηρούμε.
+      if (!_finalTargetFoundAndHandled) return;
+    }
+    if (_finalTargetFoundAndHandled) {
+      // Αυτό το μήνυμα θα έχει τεθεί από την _processBarcodes όταν βρεθεί ο τελικός στόχος.
+      // Δεν το αλλάζουμε εδώ, εκτός αν θέλουμε ένα γενικό μήνυμα επιτυχίας.
       return;
     }
 
@@ -551,25 +597,24 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
         _feedbackColor = Colors.white;
         break;
       case QrScanningMode.error:
-        // Το μήνυμα σφάλματος θα έχει τεθεί ήδη
         _feedbackColor = Colors.redAccent;
         break;
     }
   }
 
-  // Εκφωνώ το κείμενο
   Future<void> _speak(String text) async {
     if (_isTtsSpeaking || _isTtsCoolingDown) {
-      debugPrint("Speak request ignored: TTS is busy or cooling down.");
+      debugPrint(
+        "Speak request ignored: TTS is busy or cooling down for '$text'",
+      );
       return;
     }
     try {
-      await flutterTts.stop(); // Σταματάω τυχόν προηγούμενη εκφώνηση
-      await flutterTts.speak(text); // Ξεκινάω τη νέα
+      await flutterTts.stop();
+      await flutterTts.speak(text);
       debugPrint("TTS Speak initiated for: $text");
     } catch (e) {
       debugPrint("TTS Error speaking: $e");
-      // Αν γίνει λάθος, επαναφέρω τις σημαίες του TTS
       if (mounted) {
         setState(() {
           _isTtsSpeaking = false;
@@ -580,7 +625,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
     }
   }
 
-  // Μετατρέπω το CameraImage σε InputImage
   InputImage? _inputImageFromCameraImage(
     CameraImage image,
     int sensorOrientation,
@@ -588,18 +632,15 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
     final InputImageRotation imageRotation =
         InputImageRotationValue.fromRawValue(sensorOrientation) ??
         InputImageRotation.rotation0deg;
-
     final InputImageFormat? inputImageFormat =
         InputImageFormatValue.fromRawValue(image.format.raw);
 
-    // Ελέγχω αν το format υποστηρίζεται
     if (inputImageFormat == null ||
         (Platform.isAndroid && inputImageFormat != InputImageFormat.nv21) ||
         (Platform.isIOS && inputImageFormat != InputImageFormat.bgra8888)) {
       debugPrint('Warning: Unsupported image format: ${image.format.group}');
       return null;
     }
-
     if (image.planes.isEmpty) {
       debugPrint('Warning: Image has no planes!');
       return null;
@@ -607,12 +648,10 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
 
     final plane = image.planes.first;
     final bytes = plane.bytes;
-
     final Size imageSize = Size(
       image.width.toDouble(),
       image.height.toDouble(),
     );
-
     final InputImageMetadata inputImageData = InputImageMetadata(
       size: imageSize,
       rotation: imageRotation,
@@ -628,19 +667,12 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
     }
   }
 
-  // Placeholder συνάρτηση για σύγκριση LoC.
-  // !!! ΣΗΜΑΝΤΙΚΟ: Πρέπει να αντικατασταθεί με τη σωστή λογική σύγκρισης LoC
-  // που χρησιμοποιείς στο dummy_books_service.dart ή όπου αλλού.
   bool isLocInRange(String targetLoc, String startLoc, String endLoc) {
-    debugPrint(
-      "Checking (placeholder) if '$targetLoc' is between '$startLoc' and '$endLoc'",
-    );
+    debugPrint("Checking if '$targetLoc' is between '$startLoc' and '$endLoc'");
     try {
       final String targetUpper = targetLoc.toUpperCase();
       final String startUpper = startLoc.toUpperCase();
       final String endUpper = endLoc.toUpperCase();
-      // Αυτή είναι μια πολύ απλή αλφαριθμητική σύγκριση.
-      // Μπορεί να μην είναι σωστή για όλες τις περιπτώσεις LoC.
       bool basicCheck =
           targetUpper.compareTo(startUpper) >= 0 &&
           targetUpper.compareTo(endUpper) <= 0;
@@ -657,24 +689,11 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
     return Consumer<CameraService>(
       builder: (context, cameraService, child) {
         return Scaffold(
-          appBar: AppBar(title: Text(_getAppBarTitle())),
-          body: _buildScannerBody(
-            cameraService,
-          ), // Αυτή η μέθοδος θα τροποποιηθεί
+          appBar: myAppBar,
+          body: _buildScannerBody(cameraService),
         );
       },
     );
-  }
-
-  String _getAppBarTitle() {
-    switch (_currentMode) {
-      case QrScanningMode.lookingForCorridor:
-        return "Σάρωση: ${widget.targetCorridorLabel}";
-      case QrScanningMode.lookingForShelf:
-        return "Σάρωση Ραφιού ${widget.targetShelf} (${widget.targetCorridorLabel})";
-      case QrScanningMode.error:
-        return "Σφάλμα Σάρωσης";
-    }
   }
 
   Widget _buildScannerBody(CameraService cameraService) {
@@ -685,7 +704,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text('Απαιτείται άδεια κάμερας για τη σάρωση QR.'),
-            const SizedBox(height: 10),
             ElevatedButton(
               onPressed: () => _initializeCameraSystem(cameraService),
               child: const Text('Χορήγηση Άδειας'),
@@ -694,11 +712,9 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
         ),
       );
     }
-
     if (!cameraService.isInitialized && _currentMode != QrScanningMode.error) {
       return const Center(child: CircularProgressIndicator());
     }
-
     if (cameraService.errorMessage != null &&
         _currentMode != QrScanningMode.error) {
       return Center(
@@ -715,32 +731,26 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
     final previewSize = cameraService.previewSize;
     if (previewSize == null || previewSize.isEmpty) {
       return const Center(
-        child: Text("Σφάλμα μεγέθους προεπισκόπησης κάμερας. Επανεκκινήστε."),
+        child: Text("Σφάλμα μεγέθους προεπισκόπησης. Επανεκκινήστε."),
       );
     }
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Υπολογισμοί για το scaling της προεπισκόπησης
         double scale = constraints.maxWidth / previewSize.width;
         double cameraWidgetHeight = previewSize.height * scale;
-
-        // Περιορίζω το μέγιστο ύψος που μπορεί να πάρει η κάμερα
-        // για να υπάρχει πάντα χώρος για τις πληροφορίες του βιβλίου,
-        // ακόμα και σε landscape ή πολύ μικρές οθόνες, πριν χρειαστεί scroll.
-        // Το υπόλοιπο θα καλυφθεί από το SingleChildScrollView.
         final double maxAllocatedCameraHeight =
-            constraints.maxHeight * 0.7; // π.χ. 70% του διαθέσιμου ύψους
+            constraints.maxHeight *
+            (_wasCorrectShelfFound
+                ? 0.60
+                : 0.7); // * Μικραίνει αν εμφανιστεί το κουμπί
 
         if (cameraWidgetHeight > maxAllocatedCameraHeight) {
           cameraWidgetHeight = maxAllocatedCameraHeight;
-          // Επαναυπολογίζω το scale αν άλλαξε το ύψος για να διατηρηθεί το aspect ratio
           scale = cameraWidgetHeight / previewSize.height;
         }
         double cameraWidgetWidth = previewSize.width * scale;
 
-        // Αν το cameraWidgetHeight είναι πολύ μικρό, δίνω ένα λογικό ελάχιστο
-        // (π.χ. για landscape mode σε πολύ στενή οθόνη)
         if (cameraWidgetHeight < 200 && constraints.maxHeight > 200) {
           cameraWidgetHeight = 200;
           scale = cameraWidgetHeight / previewSize.height;
@@ -752,17 +762,13 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
           }
         }
 
-        // Τυλίγω το Column με SingleChildScrollView
         return SingleChildScrollView(
           child: Column(
-            // mainAxisSize: MainAxisSize.min, // Προαιρετικά, για να παίρνει το Column το ελάχιστο δυνατό ύψος
             children: [
-              // Stack για την κάμερα και τα overlays της
               Stack(
                 alignment: Alignment.center,
                 children: [
                   SizedBox(
-                    // Χρησιμοποιώ SizedBox αντί για Expanded
                     width: cameraWidgetWidth,
                     height: cameraWidgetHeight,
                     child:
@@ -777,9 +783,8 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                                   style: TextStyle(color: Colors.white),
                                 ),
                               ),
-                            ), // Placeholder αν ο controller δεν είναι έτοιμος
+                            ),
                   ),
-                  // Το μήνυμα στο κάτω μέρος της κάμερας
                   Positioned(
                     bottom: 10,
                     left: 20,
@@ -814,7 +819,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                       ),
                     ),
                   ),
-                  // Εικονίδιο κατάστασης TTS
                   if (_isTtsSpeaking || _isTtsCoolingDown)
                     Positioned(
                       top: 10,
@@ -832,10 +836,8 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                     ),
                 ],
               ),
-              // Container για τις πληροφορίες του βιβλίου
               Container(
-                // Χρησιμοποιώ Container αντί για Expanded
-                width: double.infinity, // Γεμίζει το πλάτος
+                width: double.infinity,
                 padding: const EdgeInsets.all(16.0),
                 color: Theme.of(
                   context,
@@ -871,6 +873,70 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                   ],
                 ),
               ),
+              // * ΚΟΥΜΠΙ ΟΛΟΚΛΗΡΩΣΗΣ
+              if (_wasCorrectShelfFound)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16.0, 20.0, 16.0, 20.0),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          buttonColor, // Χρησιμοποιούμε το buttonColor από τα constants
+                      foregroundColor: Colors.white, // Χρώμα κειμένου
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 15,
+                      ),
+                      textStyle: const TextStyle(fontSize: 18),
+                      minimumSize: const Size(double.infinity, 50),
+                    ),
+                    onPressed: () {
+                      if (_finalTargetFoundAndHandled) {
+                        // Βεβαιωνόμαστε ότι ο τελικός στόχος έχει επιτευχθεί
+                        // Υπολογίζουμε τον χρόνο μόνο αν δεν έχει ήδη υπολογιστεί
+                        if (_timeToFindShelf == null &&
+                            _startTime != null &&
+                            _shelfFoundTime != null) {
+                          _timeToFindShelf = _shelfFoundTime!.difference(
+                            _startTime!,
+                          );
+                        } else if (_timeToFindShelf == null &&
+                            _startTime != null) {
+                          // Fallback αν ο χρήστης πάτησε πολύ γρήγορα
+                          _shelfFoundTime = DateTime.now();
+                          _timeToFindShelf = _shelfFoundTime!.difference(
+                            _startTime!,
+                          );
+                        }
+
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (context) => BookFoundScreen(
+                                  bookTitle: widget.bookTitle,
+                                  bookAuthor: widget.bookAuthor,
+                                  bookIsbn: widget.bookIsbn,
+                                  bookLoc: widget.targetBookLoc,
+                                  shelfNumber: widget.targetShelf,
+                                  corridorLabel: widget.targetCorridorLabel,
+                                  timeTaken: _timeToFindShelf,
+                                ),
+                          ),
+                        );
+                      } else {
+                        // Προαιρετικά: Εμφάνιση μηνύματος αν πατηθεί ενώ δεν έχει ολοκληρωθεί η εύρεση
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              "Η αναζήτηση δεν έχει ολοκληρωθεί πλήρως.",
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: const Text('Ολοκλήρωση Αναζήτησης'),
+                  ),
+                ),
             ],
           ),
         );

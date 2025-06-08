@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:inlib_nav/Model/book.dart';
 import 'package:inlib_nav/View/qr_scanning_screen.dart';
-import 'package:inlib_nav/constants.dart'; // Για τα χρώματα και το AppBar (αν χρησιμοποιούνται)
+import 'package:inlib_nav/constants.dart';
 
 /// Οθόνη που εμφανίζει τις λεπτομέρειες ενός βιβλίου
 /// και παρέχει το κουμπί για έναρξη πλοήγησης/σάρωσης.
 class BookDetailsScreen extends StatelessWidget {
-  // Το αντικείμενο Book που θα εμφανιστεί
   final Book book;
 
   const BookDetailsScreen({super.key, required this.book});
@@ -14,46 +13,39 @@ class BookDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Χρησιμοποιούμε τα χρώματα και το AppBar από τα constants
       backgroundColor: scaffoldBackroundColor,
       appBar: myAppBar,
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          // Στοίχιση των στοιχείων στην αρχή (αριστερά)
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Εμφάνιση λεπτομερειών του βιβλίου
             Text(
               'Συγγραφέας: ${book.author}',
               style: const TextStyle(fontSize: 18),
             ),
-            const SizedBox(height: 8), // Μικρό κενό
+            const SizedBox(height: 8),
             Text('ISBN: ${book.isbn}', style: const TextStyle(fontSize: 18)),
             const SizedBox(height: 8),
-            // Εμφάνιση του κωδικού LOC
+
             Text(
               'Ταξινόμηση (LOC): ${book.loc}',
               style: const TextStyle(fontSize: 18),
             ),
             const SizedBox(height: 8),
-            // Εμφάνιση του αριθμού ραφιού
+
             Text('Ράφι: ${book.shelf}', style: const TextStyle(fontSize: 18)),
             const SizedBox(height: 8),
-            // Εμφάνιση του διαδρόμου (με τη νέα μορφή "ΔΙΑΔΡΟΜΟΣ Χ")
+
             Text(
               'Διάδρομος: ${book.corridor}',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold, // Έντονα γράμματα για έμφαση
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 20), // Μεγαλύτερο κενό πριν το κουμπί
-            // Κουμπί για έναρξη σάρωσης/πλοήγησης
+            const SizedBox(height: 20),
+
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                // Χρώματα και padding από τα constants
-                foregroundColor: Colors.white, // Χρώμα κειμένου κουμπιού
+                foregroundColor: Colors.white,
                 backgroundColor: buttonColor,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -61,7 +53,6 @@ class BookDetailsScreen extends StatelessWidget {
                 ),
               ),
               onPressed: () {
-                // Όταν πατηθεί το κουμπί:
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -70,7 +61,7 @@ class BookDetailsScreen extends StatelessWidget {
                           targetCorridorLabel: book.corridor,
                           targetBookLoc: book.loc,
                           targetShelf: book.shelf,
-                          // Πέρασε τα νέα στοιχεία εδώ:
+
                           bookTitle: book.title,
                           bookAuthor: book.author,
                           bookIsbn: book.isbn,
@@ -78,9 +69,7 @@ class BookDetailsScreen extends StatelessWidget {
                   ),
                 );
               },
-              child: const Text(
-                'Έναρξη Σάρωσης για Διάδρομο',
-              ), // Ενημερωμένο κείμενο κουμπιού
+              child: const Text('Έναρξη Σάρωσης για Διάδρομο'),
             ),
           ],
         ),

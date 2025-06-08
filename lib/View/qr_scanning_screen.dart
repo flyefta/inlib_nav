@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert'; // Για το jsonDecode
-import 'dart:io'; // Για το Platform
+import 'dart:io'; //
 
 import 'package:flutter_tts/flutter_tts.dart'; // Για την εκφώνηση
 import 'package:camera/camera.dart'; // Για την κάμερα
@@ -11,16 +11,15 @@ import 'package:vibration/vibration.dart'; // Για τη δόνηση
 
 import 'package:inlib_nav/Services/camera_service.dart';
 import 'package:inlib_nav/Services/dummy_books_service.dart';
-import 'package:inlib_nav/constants.dart'; // * ΝΕΟ: Import για την myAppBar
-import 'package:inlib_nav/View/book_found_screen.dart'; // * ΝΕΟ: Import για την οθόνη επιτυχίας
+import 'package:inlib_nav/constants.dart';
+import 'package:inlib_nav/View/book_found_screen.dart';
 
 // Οι καταστάσεις λειτουργίας μου: ψάχνω διάδρομο ή ράφι ή έχω σφάλμα.
 enum QrScanningMode { lookingForCorridor, lookingForShelf, error }
 
 /// Η οθόνη μου για τη σάρωση QR.
 class QrScanningScreen extends StatefulWidget {
-  final String
-  targetCorridorLabel; // Ο διάδρομος-στόχος μου (π.χ., "ΔΙΑΔΡΟΜΟΣ 1")
+  final String targetCorridorLabel;
   final String targetBookLoc; // Το LoC του βιβλίου-στόχου
   final int targetShelf; // Το ράφι-στόχος
   // Προσθέτω τα πεδία για τα στοιχεία του βιβλίου που θα εμφανίζω
@@ -33,7 +32,6 @@ class QrScanningScreen extends StatefulWidget {
     required this.targetCorridorLabel,
     required this.targetBookLoc,
     required this.targetShelf,
-    // Οι νέες παράμετροι για τα στοιχεία του βιβλίου
     required this.bookTitle,
     required this.bookAuthor,
     required this.bookIsbn,
@@ -67,13 +65,11 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
   bool _notFoundMessageSpoken = false;
   final int _notFoundTimeoutSeconds = 20;
 
-  // Βοηθητικές μεταβλητές πλοήγησης
   bool _wasCorrectCorridorFound = false;
   bool _wasCorrectShelfFound = false; // Θα γίνει true όταν βρεθεί το σωστό ράφι
   bool _corridorVibrationPlayedForThisDetection = false;
   bool _finalTargetFoundAndHandled = false;
 
-  // * ΝΕΕΣ ΜΕΤΑΒΛΗΤΕΣ ΓΙΑ ΤΟΝ ΧΡΟΝΟ
   DateTime? _startTime; // Χρόνος έναρξης αναζήτησης από αυτή την οθόνη
   DateTime? _shelfFoundTime; // Χρόνος που βρέθηκε το σωστό ράφι
   Duration? _timeToFindShelf; // Διάρκεια αναζήτησης
@@ -193,7 +189,7 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
       if (mounted &&
           !_notFoundMessageSpoken &&
           _lastDetectedBarcode == null &&
-          !_wasCorrectShelfFound && // Χρησιμοποιούμε την _wasCorrectShelfFound
+          !_wasCorrectShelfFound &&
           !_finalTargetFoundAndHandled) {
         String msg =
             _currentMode == QrScanningMode.lookingForCorridor
@@ -325,7 +321,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
     String currentUiMessage = _uiMessage;
     Color currentFeedbackColor = _feedbackColor;
     bool tempCorrectCorridorFound = _wasCorrectCorridorFound;
-    // bool tempCorrectShelfFound = _wasCorrectShelfFound; // Δεν το χρειαζόμαστε πλέον εδώ άμεσα
     String? ttsMessageToSpeak;
 
     if (!isAppQr) {
@@ -394,7 +389,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
             if (actualCorridorOfScannedShelf == widget.targetCorridorLabel) {
               _currentMode = QrScanningMode.lookingForShelf;
               tempCorrectCorridorFound = true;
-              // _wasCorrectCorridorFound = true; // Θα γίνει set παρακάτω
               if (!_corridorVibrationPlayedForThisDetection) {
                 Vibration.vibrate(duration: 150);
                 _corridorVibrationPlayedForThisDetection = true;
@@ -431,7 +425,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                       stateChanged = true; // Σημαντικό για να φανεί το κουμπί
                     }
                   } else {
-                    // _wasCorrectShelfFound = false; // Δεν χρειάζεται, παραμένει false αν δεν ήταν ήδη true
                     currentFeedbackColor = Colors.yellowAccent;
                     currentUiMessage =
                         "Ράφι ${widget.targetShelf} (${widget.targetCorridorLabel}). Το βιβλίο δεν είναι σε αυτό το εύρος LoC ($scannedShelfLocStart - $scannedShelfLocEnd).";
@@ -439,7 +432,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                         "Σωστό ράφι και διάδρομος, αλλά το βιβλίο δεν ανήκει εδώ.";
                   }
                 } else {
-                  // _wasCorrectShelfFound = false;
                   currentFeedbackColor = Colors.redAccent;
                   currentUiMessage =
                       "Σφάλμα QR ραφιού (${widget.targetShelf}): Λείπει το εύρος LoC.";
@@ -447,7 +439,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                       "Σφάλμα στα δεδομένα του QR code του ραφιού.";
                 }
               } else {
-                // _wasCorrectShelfFound = false;
                 currentFeedbackColor = Colors.yellowAccent;
                 String shelfSideTarget =
                     widget.targetShelf % 2 != 0 ? "στα αριστερά" : "στα δεξιά";
@@ -466,7 +457,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                   "Λάθος Διάδρομος. Αυτό το ράφι βρίσκεται στον $actualCorridorOfScannedShelf. Πρέπει να μεταβείτε στον ${widget.targetCorridorLabel}.";
             }
           } else {
-            // _currentMode == QrScanningMode.lookingForShelf
             if (scannedShelfNum == widget.targetShelf) {
               if (scannedShelfLocStart != null && scannedShelfLocEnd != null) {
                 bool isInRange = isLocInRange(
@@ -495,7 +485,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                     stateChanged = true;
                   }
                 } else {
-                  // _wasCorrectShelfFound = false;
                   currentFeedbackColor = Colors.yellowAccent;
                   currentUiMessage =
                       "Σωστό Ράφι (${widget.targetShelf}), αλλά λάθος εύρος LoC.\nΠεριέχει: $scannedShelfLocStart - $scannedShelfLocEnd.\nΨάχνετε: ${widget.targetBookLoc}.";
@@ -503,7 +492,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                       "Σωστό ράφι, αλλά το βιβλίο δεν ανήκει εδώ. Ελέγξτε τα δεδομένα.";
                 }
               } else {
-                // _wasCorrectShelfFound = false;
                 currentFeedbackColor = Colors.redAccent;
                 currentUiMessage =
                     "Σφάλμα QR ραφιού (${widget.targetShelf}): Λείπει το εύρος LoC.";
@@ -511,7 +499,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                     "Σφάλμα στα δεδομένα του QR code του ραφιού.";
               }
             } else {
-              // _wasCorrectShelfFound = false;
               currentFeedbackColor = Colors.yellowAccent;
               currentUiMessage =
                   "Λάθος Ράφι (είδα το $scannedShelfNum, ψάχνω το ${widget.targetShelf}).\nΣυνεχίστε στην άλλη πλευρά του διαδρόμου.";
@@ -520,7 +507,6 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
             }
           }
         } else {
-          // _wasCorrectShelfFound = false;
           currentFeedbackColor = Colors.redAccent;
           currentUiMessage = "Σφάλμα QR ραφιού: Λείπει ο αριθμός ραφιού.";
           ttsMessageToSpeak = "Σφάλμα στα δεδομένα του QR code του ραφιού.";
@@ -536,13 +522,11 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
         _uiMessage != currentUiMessage ||
         _feedbackColor != currentFeedbackColor ||
         _wasCorrectCorridorFound != tempCorrectCorridorFound ||
-        _wasCorrectShelfFound !=
-            _wasCorrectShelfFound /* Ελέγχουμε την πραγματική τιμή εδώ */ ) {
+        _wasCorrectShelfFound != _wasCorrectShelfFound) {
       stateChanged = true;
       _uiMessage = currentUiMessage;
       _feedbackColor = currentFeedbackColor;
       _wasCorrectCorridorFound = tempCorrectCorridorFound;
-      // Η _wasCorrectShelfFound ενημερώνεται απευθείας παραπάνω
       _lastDetectedBarcode = barcode;
     }
 
@@ -879,9 +863,8 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                   padding: const EdgeInsets.fromLTRB(16.0, 20.0, 16.0, 20.0),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          buttonColor, // Χρησιμοποιούμε το buttonColor από τα constants
-                      foregroundColor: Colors.white, // Χρώμα κειμένου
+                      backgroundColor: buttonColor,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 30,
                         vertical: 15,
@@ -924,7 +907,7 @@ class _QrScanningScreenState extends State<QrScanningScreen> {
                           ),
                         );
                       } else {
-                        // Προαιρετικά: Εμφάνιση μηνύματος αν πατηθεί ενώ δεν έχει ολοκληρωθεί η εύρεση
+                        // Εμφάνιση μηνύματος αν πατηθεί ενώ δεν έχει ολοκληρωθεί η εύρεση
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(

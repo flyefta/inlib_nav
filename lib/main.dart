@@ -8,12 +8,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(
     MultiProvider(
-      // Χρήσιμο αν έχεις πολλούς providers
-      providers: [
-        ChangeNotifierProvider(create: (_) => CameraService()),
-        // ChangeNotifierProvider(create: (_) => OcrService()), // Αν φτιάξω κι άλλους providers
-        // ChangeNotifierProvider(create: (_) => AudioService()),
-      ],
+      providers: [ChangeNotifierProvider(create: (_) => CameraService())],
       child: const MainApp(),
     ),
   );

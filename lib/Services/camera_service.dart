@@ -1,14 +1,10 @@
 import 'dart:async';
-import 'dart:io'; // Για το Platform.isAndroid
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// Service που έφτιαξα για να διαχειρίζομαι την κάμερα.
-///
-/// Χρησιμοποιώ το ChangeNotifier για να ενημερώνω τους listeners μου
-/// για αλλαγές στην κατάσταση (άδεια, αρχικοποίηση, σφάλματα).
 class CameraService with ChangeNotifier {
   CameraController? _controller;
   List<CameraDescription>? _cameras;
@@ -18,8 +14,6 @@ class CameraService with ChangeNotifier {
   bool _isInitialized = false;
   bool _isDisposed = false;
   String? _errorMessage;
-
-  // --- Getters για την κατάσταση (να ξέρω τι γίνεται) ---
 
   /// Επιστρέφει true αν μου έχει δοθεί άδεια για την κάμερα.
   bool get isPermissionGranted => _isPermissionGranted;
@@ -45,8 +39,6 @@ class CameraService with ChangeNotifier {
   /// Επιστρέφει true αν η κάμερα στέλνει stream τώρα.
   bool get isStreamingImages => _controller?.value.isStreamingImages ?? false;
 
-  // --- Οι Μέθοδοί μου ---
-
   /// Ζητάω άδεια από τον χρήστη.
   /// Επιστρέφει true αν μου την έδωσε, αλλιώς false.
   Future<bool> requestPermission() async {
@@ -62,15 +54,10 @@ class CameraService with ChangeNotifier {
   }
 
   /// Αρχικοποιώ τον CameraController.
-  ///
-  /// Διαλέγω την πίσω κάμερα (αν βρω), την αρχικοποιώ και
-  /// προαιρετικά ξεκινάω το image stream καλώντας την [onImageAvailable].
-  ///
-  /// Πρέπει να έχω πάρει άδεια πρώτα!
+
   Future<void> initializeController({
     ResolutionPreset resolutionPreset = ResolutionPreset.high,
-    ImageFormatGroup?
-    imageFormatGroup, // Προαιρετικό, θα διαλέξω αυτόματα αν δεν μου δώσεις
+    ImageFormatGroup? imageFormatGroup,
     Function(CameraImage image)? onImageAvailable,
   }) async {
     if (_isInitializing || _isInitialized) {
@@ -83,9 +70,7 @@ class CameraService with ChangeNotifier {
       _errorMessage = "CameraService Error: Camera permission not granted.";
       debugPrint(_errorMessage);
       _notify();
-      // Καλύτερα να ξαναζητήσω άδεια ή να δείξω κάτι στο UI
-      //await requestPermission(); // Εναλλακτικά, ξαναζητάω άδεια
-      //if (!_isPermissionGranted) return;
+
       return;
     }
 
@@ -109,24 +94,23 @@ class CameraService with ChangeNotifier {
         orElse: () => _cameras!.first, // Αλλιώς, παίρνω την πρώτη που βρίσκω
       );
 
-      // Διαλέγω ImageFormatGroup αν δεν μου δώσουν
       final formatGroup =
           imageFormatGroup ??
           (Platform.isAndroid
               ? ImageFormatGroup
-                  .nv21 // Αυτό θέλει συνήθως το ML Kit στο Android
-              : ImageFormatGroup.bgra8888); // Αυτό συνήθως παίζει στο iOS
+                  .nv21 //android
+              : ImageFormatGroup.bgra8888); //  iOS
 
       _controller = CameraController(
         selectedCamera,
         resolutionPreset,
-        enableAudio: false, // Δεν χρειάζομαι ήχο για το OCR
+        enableAudio: false,
         imageFormatGroup: formatGroup,
       );
 
       await _controller!.initialize();
 
-      // Ξεκινάω το stream αν μου έδωσαν callback
+      // Ξεκινάω το stream
       if (onImageAvailable != null) {
         await startImageStream(onImageAvailable);
       }
@@ -137,7 +121,7 @@ class CameraService with ChangeNotifier {
     } on CameraException catch (e) {
       _errorMessage = "Camera Error: ${e.code} - ${e.description}";
       debugPrint("CameraService: Error initializing camera: $_errorMessage");
-      _controller = null; // Σιγουρεύομαι ότι είναι null αν γίνει λάθος
+      _controller = null;
       _isInitialized = false;
     } catch (e) {
       _errorMessage = "Unexpected Error: ${e.toString()}";
@@ -187,13 +171,12 @@ class CameraService with ChangeNotifier {
     if (!_isInitialized ||
         _controller == null ||
         !_controller!.value.isStreamingImages) {
-      // Δεν χρειάζεται να κάνω κάτι αν δεν τρέχει ήδη
       return;
     }
     try {
       await _controller!.stopImageStream();
       debugPrint("CameraService: Image stream stopped.");
-      _notify(); // Ενημερώνω ότι άλλαξε η κατάσταση (isStreaming)
+      _notify();
     } on CameraException catch (e) {
       _errorMessage =
           "Camera Error stopping stream: ${e.code} - ${e.description}";
@@ -216,7 +199,7 @@ class CameraService with ChangeNotifier {
     _controller = null;
     _isInitialized = false;
     _isInitializing = false;
-    super.dispose(); // Καλώ το dispose του ChangeNotifier
+    super.dispose();
     debugPrint("CameraService: Disposed.");
   }
 

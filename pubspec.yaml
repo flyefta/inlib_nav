@@ -35,8 +35,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/images/inlib_logo.png
-    - assets/images/inlib_logo_trsp.png
     - assets/images/inlib_logo2_trsp.png
     - assets/images/correct_way.png
     - assets/images/wrong_way.png
